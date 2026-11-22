@@ -194,7 +194,7 @@ function broadcast() {
  * A generation token prevents a slow reply for an old song from replacing the current one.
  * Multiple exact IDs are tried in order because a recording may appear on several releases.
  */
-async function refreshIndependentCanvas(): Promise<void> {
+async function refreshIndependentCanvas(force = false): Promise<void> {
   const search = media.none ? null : current;
   if (!search || search.key !== mediaKey(media)) {
     if (independentCanvasLookupKey || independentCanvasNow) {
@@ -220,7 +220,7 @@ async function refreshIndependentCanvas(): Promise<void> {
     ...(search.track.spotifyId ? [search.track.spotifyId] : []),
   ])].filter((id) => /^[A-Za-z0-9]{22}$/.test(id)).slice(0, 5);
   const lookupKey = search.key + "|" + ids.join(",");
-  if (lookupKey === independentCanvasLookupKey) return;
+  if (lookupKey === independentCanvasLookupKey && !force) return;
 
   independentCanvasLookupKey = lookupKey;
   const generation = ++independentCanvasGeneration;
@@ -246,6 +246,8 @@ onChange(() => {
   void refreshIndependentCanvas();
   broadcast();
 });
+// Retry transient service/network failures without repeatedly querying cached no-Canvas results.
+setInterval(() => void refreshIndependentCanvas(true), 60_000);
 
 // ---- covers ---------------------------------------------------------------------------------
 
