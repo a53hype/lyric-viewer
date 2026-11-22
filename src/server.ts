@@ -388,7 +388,7 @@ const server = Bun.serve({
       const state = acceptYtmState(await req.json().catch(() => null));
       if (!state) return new Response("", { status: 400 });
       recompute();
-      return json({ cmds: drainYtm() });
+      return json({ cmds: drainYtm(state.site) });
     }
     if (origin && origin !== `http://${HOST}:${PORT}` && origin !== `http://localhost:${PORT}`) return new Response("", { status: 403 });
     if (!origin && req.method !== "GET" && req.method !== "HEAD") return new Response("", { status: 403 });

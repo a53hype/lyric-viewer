@@ -3,10 +3,10 @@ import { acceptYtmState, drainYtm, parseYtmState, queueYtm, sameSong, ytmNow } f
 
 test("a state report is read field by field", () => {
   expect(parseYtmState({ title: "Bring Me To Life", like: true, shuffle: true, repeat: "ONE", volume: 40, quality: "YouTube Music · Opus 160 kbps" })).toEqual({
-    title: "Bring Me To Life", heart: true, shuffle: true, repeat: 2, volume: 0.4, quality: "YouTube Music · Opus 160 kbps",
+    site: "ytm", title: "Bring Me To Life", heart: true, shuffle: true, repeat: 2, volume: 0.4, quality: "YouTube Music · Opus 160 kbps",
   });
   const odd = parseYtmState({ title: "x", like: "yes", repeat: "banana", volume: 500, quality: "<script>" });
-  expect(odd).toEqual({ title: "x", heart: false, shuffle: false, repeat: 0, volume: 1, quality: undefined });
+  expect(odd).toEqual({ site: "ytm", title: "x", heart: false, shuffle: false, repeat: 0, volume: 1, quality: undefined });
   expect(parseYtmState(null)).toBeNull();
   expect(parseYtmState({ title: "" })).toBeNull();
   expect(parseYtmState({ title: "a".repeat(301) })).toBeNull();
@@ -33,4 +33,20 @@ test("only the four fixed actions are queued, and a newer one replaces an older 
   queueYtm("volume", 0.7);
   expect(drainYtm()).toEqual([{ action: "heart", arg: 0 }, { action: "volume", arg: 0.7 }]);
   expect(drainYtm()).toEqual([]);
+});
+
+test("a command goes only to the site that is playing", () => {
+  acceptYtmState({ site: "amazon", title: "Song" });
+  drainYtm("amazon");
+  queueYtm("shuffle");
+  expect(drainYtm("ytm")).toEqual([]);
+  expect(drainYtm("amazon")).toEqual([{ action: "shuffle", arg: 0 }]);
+  expect(parseYtmState({ site: "amazon", title: "x" })?.site).toBe("amazon");
+  expect(parseYtmState({ site: "spotify", title: "x" })?.site).toBe("ytm");
+});
+
+test("a measured quality line with ~ and a comma is accepted", () => {
+  const q = "Amazon Music · Ultra HD · FLAC 24-bit / 96 kHz · ~2,320 kbps";
+  expect(parseYtmState({ title: "x", quality: q })?.quality).toBe(q);
+  expect(parseYtmState({ title: "x", quality: "<img src=x>" })?.quality).toBeUndefined();
 });

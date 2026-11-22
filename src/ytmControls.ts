@@ -1,8 +1,8 @@
-// YouTube Music's own player bar (like, shuffle, repeat, volume, audio quality), as the viewer's browser extension reports it.
+// The player bar of YouTube Music or Amazon Music in a browser (like, shuffle, repeat, volume, audio quality), as the viewer's browser extensions report it.
 // The extension posts the page's state about once a second and is handed back any commands waiting for it, so nothing here
 // reaches into the browser: no debugging port is needed.
 
-export type YtmState = { title: string; heart: boolean; shuffle: boolean; /** 0 off, 1 all, 2 one. */ repeat: number; /** 0 to 1. */ volume: number; quality?: string };
+export type YtmState = { /** Which extension sent it: YouTube Music or Amazon Music. */ site: "ytm" | "amazon"; title: string; heart: boolean; shuffle: boolean; /** 0 off, 1 all, 2 one. */ repeat: number; /** 0 to 1. */ volume: number; quality?: string };
 
 const FRESH_MS = 4000;
 let latest: { state: YtmState; at: number } | null = null;
@@ -13,8 +13,9 @@ export function parseYtmState(body: any): YtmState | null {
   if (!body || typeof body.title !== "string" || body.title.length === 0 || body.title.length > 300) return null;
   const repeat = body.repeat === "ALL" ? 1 : body.repeat === "ONE" ? 2 : 0;
   const volume = Number(body.volume);
-  const quality = typeof body.quality === "string" && body.quality.length <= 80 && /^[\p{L}\p{N} .,()/+·-]+$/u.test(body.quality) ? body.quality : undefined;
+  const quality = typeof body.quality === "string" && body.quality.length <= 140 && /^[\p{L}\p{N} .,()/+~·-]+$/u.test(body.quality) ? body.quality : undefined;
   return {
+    site: body.site === "amazon" ? "amazon" : "ytm",
     title: body.title,
     heart: body.like === true,
     shuffle: body.shuffle === true,
@@ -48,7 +49,9 @@ export function queueYtm(action: string, arg = 0): boolean {
   return true;
 }
 
-export function drainYtm(): { action: string; arg: number }[] {
+/** Commands waiting for the page that is playing. A page of the other site (both extensions can be installed) is handed none. */
+export function drainYtm(site: "ytm" | "amazon" = "ytm"): { action: string; arg: number }[] {
+  if (latest && latest.state.site !== site) return [];
   const out = queue;
   queue = [];
   return out;

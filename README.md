@@ -138,7 +138,18 @@ on `127.0.0.1` and does the four button actions when you press them in the viewe
 2. Open music.youtube.com and play a song with the viewer running.
 
 If you changed `port` in `config.json`, change `3838` in the extension's `manifest.json` and `background.js` to match, then reload the extension.
-The quality line shows YouTube's nominal rate for the audio format it is playing (Opus 160 kbps, or Opus 256 kbps with Premium, for example), so it is not an exact bitrate. A format it does not know shows its codec and format number.
+The quality line shows YouTube's nominal rate for the audio format it is playing (Opus 160 kbps, or Opus 256 kbps with Premium, for example), so it is not an exact bitrate. A format it does not know shows its codec and format number. Both extensions also read the audio the page is playing (the codec, the sample rate and bit depth where the stream's header states them, and the bitrate actually received), which is added to the line, for example `~2,320 kbps`. Measured rates are averages and can wobble a little.
+
+### Amazon Music extras (optional)
+
+The same for Amazon Music in a browser: the extension in `extension/amazon-music` adds like, shuffle, repeat, volume and the quality: Amazon's label
+(Dolby Atmos, Ultra HD, HD or SD) and the real format, such as `FLAC 24-bit / 96 kHz · ~2,320 kbps`. It works on music.amazon.com and its country sites (.co.uk, .de, .fr, .it, .es, .co.jp, .ca, .com.au,
+.in, .com.br, .com.mx). Load it the same way as the YouTube Music one (**Load unpacked**, pick the `extension/amazon-music` folder); both can
+be installed together.
+
+Amazon's page has no public description of its player, so the extension finds each button by its label and icon name. If a button does
+nothing or its state is wrong, open the player page, press F12 and run `window.dispatchEvent(new Event('lyric-viewer-amazon-debug'))` in
+the console: it prints what the extension sees, which is what is needed to fix it.
 
 ### Spotify extras (optional)
 
