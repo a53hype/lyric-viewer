@@ -2,7 +2,7 @@ import { fileURLToPath } from "node:url";
 import { existsSync, readFileSync } from "node:fs";
 import { WORKER_BASE } from "./shim.ts";
 import { safeUrl, type Credit } from "./credit.ts";
-import { fetchFromSpicy } from "./spicy.ts";
+import { fetchFromSpicy, findSpicyIds } from "./spicy.ts";
 import { fetchFromAmllTtmlDb } from "./utils/Lyrics/providers/AmllTtmlDb.ts";
 import { fetchFromBiniLyrics } from "./utils/Lyrics/providers/BiniLyrics.ts";
 import { fetchFromDeezer } from "./utils/Lyrics/providers/Deezer.ts";
@@ -108,22 +108,29 @@ export async function lookupOne(id: (typeof ALL_IDS)[number], track: TrackInfo):
   if (id === "spicy" && !spicyKey) {
     return { id, label, state: "skipped", detail: "Needs your Spicy Lyrics key (Settings > Keys). Get one at developers.spicylyrics.org/dashboard" };
   }
-  if (id === "spicy" && !track.spotifyId) {
-    return {
-      id,
-      label,
-      state: "skipped",
-      detail: "This song was not found on Spotify, so Spicy Lyrics cannot be asked for it",
-    };
-  }
   if (id === "musixmatch" && !config.musixmatchToken) {
     return { id, label, state: "skipped", detail: "Needs your own token in config.json" };
   }
   try {
     if (id === "spicy") {
+      // Spicy Lyrics' own search finds the song first, so Spotify need not be open or have it. The Spotify ids found
+      // for the song (the running Spotify, your Spotify app, or MetaBrainz) come after, for songs the search misses.
+      let searchError: unknown = null;
+      let found: string[] = [];
+      try {
+        found = await findSpicyIds(track, spicyKey);
+      } catch (error) {
+        searchError = error;
+      }
+      const known = track.spotifyIds?.length ? track.spotifyIds : track.spotifyId ? [track.spotifyId] : [];
+      const ids = [...new Set([...found, ...known])].slice(0, 5);
+      if (ids.length === 0) {
+        if (searchError) throw searchError;
+        return { id, label, state: "none", detail: "Spicy Lyrics has no exact match for this song" };
+      }
       // A song can have several Spotify ids (one per release); the first one Spicy Lyrics has lyrics for wins.
       let answer = null;
-      for (const spotifyId of (track.spotifyIds?.length ? track.spotifyIds : [track.spotifyId]).slice(0, 4)) {
+      for (const spotifyId of ids) {
         answer = await fetchFromSpicy({ ...track, spotifyId }, spicyKey);
         if (answer) break;
       }

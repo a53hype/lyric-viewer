@@ -118,11 +118,12 @@ keys: never share or commit it (it is in `.gitignore`).
 
 - **Spicy Lyrics key** (`spicyApiKey`): for Spicy Lyrics' own lyrics. Go to the [Spicy Lyrics developer dashboard](https://developers.spicylyrics.org/dashboard),
   create an application there, and copy its secret key into the settings window (Keys and tokens) or into `config.json`. The key is
-  only ever sent to Spicy Lyrics' API. Without it that source is skipped and the other sources still work.
+  only ever sent to Spicy Lyrics' API. Without it that source is skipped and the other sources still work. The song is found with Spicy Lyrics' own
+  search (title, artist, album and length), so Spotify does not have to be open; the Spotify lookups below are the fallback when that search finds nothing.
 - **Musixmatch token** (`musixmatchToken`): your own; without it Musixmatch is skipped.
 - **Gemini key** (`geminiApiKey`, `translateTo`, `geminiModel`): for translation. The lyrics of the song on screen are sent to Google's
   Gemini API with your key, nothing else is. The key stays in your config.json: the app's page never receives it, and translation requests go through the local server, which adds it.
-- **Spotify app** (`spotifyClientId`, `spotifyClientSecret`, optional): Spicy Lyrics is looked up by Spotify song id. Without an app of
+- **Spotify app** (`spotifyClientId`, `spotifyClientSecret`, optional): only for songs Spicy Lyrics' own search does not find, which is then looked up by Spotify song id. Without an app of
   your own, and with Spotify open with its debugger port (see below), Spotify itself searches for the song, using your own login and no app or key. Failing that the app asks ListenBrainz's public lookup (artist, album, title to Spotify ids), which covers released songs. With your
   own app (or one a friend lets you use; it is only used to search the public catalogue) its search is used first.
 - **Source order and switches**: settings window → Lyrics sources.
