@@ -1,5 +1,5 @@
 import { config } from "./lookup.ts";
-import { readTrack } from "./spotify.ts";
+import { readTrack, spotifyAnonymousSearch } from "./spotify.ts";
 import { sameName } from "./names.ts";
 import { spotifyClientSearch } from "./spotifyLocal.ts";
 import worker from "./worker/worker.js";
@@ -9,10 +9,10 @@ import type { TrackInfo } from "./utils/Lyrics/providers/types.ts";
 
 /**
  * What Windows says is playing is only a title, an artist, an album and a length. Lyrics
- * sources match on those, but Spicy Lyrics wants the song's Spotify id and the page wants a
- * good cover, so both are found here: Apple's public search (no key) for the artwork, and
- * Spotify's own search, with your own Spotify app's client id and secret (config.json), for
- * the Spotify id. Without those two the Spotify id is simply not found and Spicy Lyrics is skipped.
+ * sources match on those, but Spicy Lyrics and Canvas want the song's Spotify ID and the page wants
+ * a good cover. Artwork comes from Apple's public search; the Spotify ID comes from your own Spotify
+ * app when configured, Spotify's anonymous public Web Player catalogue, the running client as a
+ * fallback, or ListenBrainz metadata. None of those catalogue fallbacks needs Spotify Desktop open.
  */
 
 export type Playing = { title: string; artist: string; album: string; durationMs: number };
@@ -123,7 +123,7 @@ async function spotifyToken(): Promise<string | null> {
 
 type SpotifyHit = { id: string; name: string; artists: string[]; album: string; durationMs: number; cover?: string };
 
-/** `run` makes one Spotify search request: with your own app's token, or through the running Spotify client (see spotifyClientSearch). */
+/** `run` searches the public catalogue with your own app token or Spotify's anonymous Web Player; the running client is a fallback. */
 async function searchSpotify(p: Playing, run: (url: string) => Promise<any | null>): Promise<SpotifyHit | null> {
   const title = plainTitle(p.title);
   const artist = p.artist.split(/\s*[;,&]\s*/)[0] || p.artist;
@@ -192,10 +192,21 @@ async function doResolve(p: Playing, spotifyHint?: string): Promise<Resolved> {
   };
 
   const bearer = await spotifyToken();
-  // Your own Spotify app's search when one is set up; otherwise the running Spotify client searches (no app or key needed, Spotify just has to be open).
+  // Search without a desktop session first: Spotify's public Web Player catalogue can be queried using
+  // the short-lived token exposed by its public embed page. Your own app's token takes priority when configured;
+  // the running Spotify client remains a final fallback for the songs the anonymous catalogue misses.
+  const searchFallback = async (url: string) => {
+    const anonymous = await spotifyAnonymousSearch(url);
+    if (anonymous?.tracks?.items?.length) return anonymous;
+    return (await spotifyClientSearch(url)) ?? anonymous;
+  };
   const run = bearer
-    ? (url: string) => getJson(url, { headers: { Authorization: `Bearer ${bearer}` } })
-    : (url: string) => spotifyClientSearch(url);
+    ? async (url: string) => {
+        const own = await getJson(url, { headers: { Authorization: `Bearer ${bearer}` } });
+        if (own?.tracks?.items?.length) return own;
+        return (await searchFallback(url)) ?? own;
+      }
+    : searchFallback;
   // Spotify naming the song means Spotify is the player, whose own cover is used; otherwise YouTube Music's is looked up too.
   const [apple, spotify, ytmCover] = await Promise.all([searchApple(p), searchSpotify(p, run), spotifyHint ? undefined : searchYtmCover(p)]);
 

@@ -124,6 +124,12 @@ export async function lookupOne(id: (typeof ALL_IDS)[number], track: TrackInfo):
       }
       const known = track.spotifyIds?.length ? track.spotifyIds : track.spotifyId ? [track.spotifyId] : [];
       const ids = [...new Set([...found, ...known])].slice(0, 5);
+      // Keep the exact Spotify IDs discovered by Spicy Lyrics on the resolved track itself.
+      // The independent Canvas lookup uses the same IDs, without making a second track-search request.
+      if (ids.length > 0) {
+        track.spotifyIds = ids;
+        if (!track.spotifyId) track.spotifyId = ids[0];
+      }
       if (ids.length === 0) {
         if (searchError) throw searchError;
         return { id, label, state: "none", detail: "Spicy Lyrics has no exact match for this song" };

@@ -5,9 +5,10 @@ import { WORKER_BASE } from "./shim.ts";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { extname, join } from "node:path";
 import { config } from "./lookup.ts";
-import { current, describe, ensureSearch, lyricsOf, onChange, pin, recheck, searchByKey, setOffset, type Media } from "./engine.ts";
+import { current, describe, ensureSearch, lyricsOf, mediaKey, onChange, pin, recheck, searchByKey, setOffset, type Media } from "./engine.ts";
 import { ALL_IDS } from "./lookup.ts";
 import { spotifyCanvas, spotifyDo, spotifyQuality, type SpotifyCanvas } from "./spotifyLocal.ts";
+import { findSpotifyCanvas } from "./canvas.ts";
 import { animatedCover, motionFile, rangeFile } from "./motion.ts";
 import { imageSize } from "./imageSize.ts";
 import { acceptYtmState, drainYtm, queueYtm, sameSong, ytmNow } from "./ytmControls.ts";
@@ -34,7 +35,12 @@ let smtcMedia: Media = { none: true };
 const BROWSER_APP = /chrome|edge|firefox|brave|opera|vivaldi|arc/i;
 let vlcNow: Media | null = null;
 let spotifyQualityText: string | null = null;
+/** Legacy Canvas/player controls read from Spotify Desktop, used only as a fallback for Canvas. */
 let spotifyCanvasNow: SpotifyCanvas | null = null;
+/** Canvas looked up by Spotify track ID, independently of Spotify Desktop or its debugger port. */
+let independentCanvasNow: { searchKey: string; url: string; type: string } | null = null;
+let independentCanvasLookupKey = "";
+let independentCanvasGeneration = 0;
 /** The video file VLC is playing (only this one is ever served, and only when it is a video file). */
 let vlcVideo: { id: string; path: string } | null = null;
 let vlcVideoFor = "";
@@ -81,6 +87,10 @@ function recompute(): void {
     picked = { ...picked, spotify: { heart: s.heart, shuffle: s.shuffle, repeat: s.repeat, volume: s.volume } };
     if (s.url && s.name.toLowerCase() === (picked.title ?? "").toLowerCase()) picked = { ...picked, canvas: { url: s.url, type: s.type ?? "VIDEO_LOOPING" } };
   }
+  // Prefer the independent lookup for any player. The debugger-derived Canvas above remains a fallback.
+  if (!picked.none && independentCanvasNow && current?.key === mediaKey(picked) && independentCanvasNow.searchKey === current.key) {
+    picked = { ...picked, canvas: { url: independentCanvasNow.url, type: independentCanvasNow.type } };
+  }
 
   // YouTube Music in a browser: its own like, shuffle, repeat, volume and audio quality, from the viewer's browser extension.
   const ytm = ytmNow();
@@ -97,6 +107,7 @@ function recompute(): void {
   }
   media = picked;
   ensureSearch(media);
+  void refreshIndependentCanvas();
   broadcast();
 }
 
@@ -174,7 +185,69 @@ function broadcast() {
     }
   }
 }
-onChange(broadcast);
+
+/**
+ * Find Canvas from the Spotify ID attached to the current resolved track. This is intentionally
+ * independent of Spotify Desktop: the ID comes from our anonymous catalogue search, ListenBrainz,
+ * Spicy Lyrics' own exact track search, or an optional Spotify developer app.
+ *
+ * A generation token prevents a slow reply for an old song from replacing the current one.
+ * Multiple exact IDs are tried in order because a recording may appear on several releases.
+ */
+async function refreshIndependentCanvas(force = false): Promise<void> {
+  const search = media.none ? null : current;
+  if (!search || search.key !== mediaKey(media)) {
+    if (independentCanvasLookupKey || independentCanvasNow) {
+      independentCanvasLookupKey = "";
+      independentCanvasNow = null;
+      independentCanvasGeneration++;
+    }
+    return;
+  }
+
+  if (!search.track) {
+    const pendingKey = search.key + "|pending";
+    if (independentCanvasLookupKey !== pendingKey) {
+      independentCanvasLookupKey = pendingKey;
+      independentCanvasNow = null;
+      independentCanvasGeneration++;
+    }
+    return;
+  }
+
+  const ids = [...new Set([
+    ...(search.track.spotifyIds ?? []),
+    ...(search.track.spotifyId ? [search.track.spotifyId] : []),
+  ])].filter((id) => /^[A-Za-z0-9]{22}$/.test(id)).slice(0, 5);
+  const lookupKey = search.key + "|" + ids.join(",");
+  if (lookupKey === independentCanvasLookupKey && !force) return;
+
+  independentCanvasLookupKey = lookupKey;
+  const generation = ++independentCanvasGeneration;
+  if (ids.length === 0) {
+    independentCanvasNow = null;
+    return;
+  }
+
+  // Keep a Canvas already found for this song while trying another exact release ID.
+  void (async () => {
+    for (const id of ids) {
+      const found = await findSpotifyCanvas(id);
+      if (!found) continue;
+      if (generation !== independentCanvasGeneration || media.none || current?.key !== search.key || mediaKey(media) !== search.key) return;
+      independentCanvasNow = { searchKey: search.key, url: found.url, type: found.type };
+      recompute();
+      return;
+    }
+  })();
+}
+
+onChange(() => {
+  void refreshIndependentCanvas();
+  broadcast();
+});
+// Retry transient service/network failures without repeatedly querying cached no-Canvas results.
+setInterval(() => void refreshIndependentCanvas(true), 60_000);
 
 // ---- covers ---------------------------------------------------------------------------------
 

@@ -23,7 +23,7 @@ animated background.
 - **Lyrics manager.** Spicy Lyrics' Local Lyrics DB: upload a `.ttml` for the song on screen (save it or use it once), search, download
   and delete. Saved lyrics win over every source.
 - **Translation and line meanings** (translation uses your own Gemini key), Simple and Minimal lyrics modes, per-song timing offsets.
-- **Spotify Canvas** in Spicy Lyrics' Canvas Stage layout, with heart, shuffle, repeat and volume (needs Spotify's debugger port, see below).
+- **Spotify Canvas** in Spicy Lyrics' Canvas Stage layout. Canvas is looked up independently from Spotify's public catalogue and the Spicy Lyrics Canvas service, so Spotify Desktop and its debugger port are not required. Heart, shuffle, repeat, volume and the Spotify quality line remain optional debugger extras.
 - **Apple Music animated covers** in the cover spot. A song with both a Canvas and an animated cover shows the animated cover in the
   cover spot and the Canvas, blurred, behind the lyrics. Animated covers never go in the background.
 - **Videos playing in VLC**: the picture fills the background (darkened, blurred, adjustable) or plays in the cover spot, kept in step
@@ -123,9 +123,7 @@ keys: never share or commit it (it is in `.gitignore`).
 - **Musixmatch token** (`musixmatchToken`): your own; without it Musixmatch is skipped.
 - **Gemini key** (`geminiApiKey`, `translateTo`, `geminiModel`): for translation. The lyrics of the song on screen are sent to Google's
   Gemini API with your key, nothing else is. The key stays in your config.json: the app's page never receives it, and translation requests go through the local server, which adds it.
-- **Spotify app** (`spotifyClientId`, `spotifyClientSecret`, optional): only for songs Spicy Lyrics' own search does not find, which is then looked up by Spotify song id. Without an app of
-  your own, and with Spotify open with its debugger port (see below), Spotify itself searches for the song, using your own login and no app or key. Failing that the app asks ListenBrainz's public lookup (artist, album, title to Spotify ids), which covers released songs. With your
-  own app (or one a friend lets you use; it is only used to search the public catalogue) its search is used first.
+- **Spotify app** (`spotifyClientId`, `spotifyClientSecret`, optional): your own app credentials can be used to search Spotify's public catalogue. Without them, the viewer now uses Spotify's anonymous Web Player catalogue search, which does not need Spotify Desktop, a Spotify login or a developer app. If Spotify's search cannot find the track, the app also asks ListenBrainz's public lookup (artist, album and title to Spotify IDs). The running Spotify client remains a last-resort search fallback when its debugger port is enabled.
 - **Source order and switches**: settings window → Lyrics sources.
 - **Music folders** (`musicFolders`): extra folders to search for the playing song's file. Files anywhere Windows has indexed are found
   without this.
@@ -144,9 +142,7 @@ The quality line shows YouTube's nominal rate for the audio format it is playing
 
 ### Spotify extras (optional)
 
-The exact song, Canvas, heart/shuffle/repeat/volume and the quality line come from Spotify's player state, read over Chromium's debugger
-port, so Spotify has to be started with `--remote-debugging-port=8088`. **That port can be used by any program on your PC**, so leave it off
-if you do not want that. Without it the app still works for any player; you just do not get those extras.
+Canvas no longer depends on this setting: the viewer resolves a Spotify track ID through Spotify's anonymous public catalogue and asks the Spicy Lyrics Canvas service directly. The debugger port is optional and is used for Spotify's exact live player state, heart, shuffle, repeat, volume and streaming-quality extras. Spotify has to be started with `--remote-debugging-port=8088` for those features. **That port can be used by any program on your PC**, so leave it off if you do not want those extras.
 `tools/undo-spotify-debug.ps1` puts Spotify's launch back as it was.
 
 With [Spicetify](https://spicetify.app):
@@ -192,7 +188,7 @@ no longer fit (`ui/build.ts` lists the replaced ones).
 ## Known limits
 
 - Spicy Lyrics only has songs that are on Spotify (it needs a Spotify id); other sources cover the rest.
-- Canvas, heart, shuffle, repeat, volume and the Spotify quality line only work with Spotify's debugger port open.
+- Canvas needs a resolvable Spotify track ID and a video Canvas entry in the Spicy Lyrics Canvas service; Spotify Desktop and its debugger port are not required. Heart, shuffle, repeat, volume and the Spotify quality line still require the debugger extras.
 - Apple animated covers exist only for some albums.
 - The old Windows Media Player and apps that do not register with Windows' media controls are not detected.
 - **A frozen Canvas** usually means Windows animations are off: Settings → Ease of Access → Display → "Show animations in Windows" must be On (Battery saver can also turn it off). Spicy Lyrics' Canvas code stops when Windows asks for reduced motion, in Spotify and in this app.
