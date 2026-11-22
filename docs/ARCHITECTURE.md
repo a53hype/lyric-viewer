@@ -11,9 +11,11 @@ Spicy Lyrics' real renderer. Pieces:
 | `src/server.ts` | Bun server: SSE `/events`, `/api/*`, `/cover`, `/fonts/*` (proxy of Spicy's font CDN), `/worker/*` (in-process Genius/YouTube Worker). |
 | `src/smtc.ps1` | PowerShell reader of Windows' media session (title, artist, position, cover thumbnail, controls). Crops Spotify's logo band off thumbnails. |
 | `src/engine.ts` | One search per song: resolve the song, ask every source, choose the best (`choose`), pins, per-song timing offsets, the "embedded" source. |
-| `src/resolve.ts` | Finds cover (Apple search) and the Spotify id (own Spotify app if configured, else ListenBrainz labs lookup, else the debugger bridge hint). |
+| `src/resolve.ts` | Finds cover (Apple search) and the Spotify ID (own Spotify app if configured, anonymous Spotify Web Player catalogue, running-client fallback, then ListenBrainz metadata lookup). |
 | `src/lookup.ts` | `config` (reads `config.json`) and `lookupOne(id, track)` for every provider; provider code is in `src/utils/Lyrics/providers` (copied from the fork). |
-| `src/spotifyLocal.ts` | Optional bridge to Spotify's debugger port 8088: exact current track id, streaming quality, the Canvas address, heart/shuffle/repeat/volume state, and `spotifyDo()` for those four buttons. |
+| `src/spotify.ts` | Public Spotify embed metadata and anonymous Web Player catalogue search; no Desktop session or developer app is needed for this fallback. |
+| `src/canvas.ts` | Best-effort Canvas lookup by Spotify track ID through the Spicy Lyrics Canvas service, with in-memory caching, request coalescing and backoff. |
+| `src/spotifyLocal.ts` | Optional bridge to Spotify's debugger port 8088: exact current track ID, streaming quality, fallback Canvas address, heart/shuffle/repeat/volume state, and `spotifyDo()` for those four buttons. |
 | `src/motion.ts` | Apple animated covers: finds the album (iTunes), reads the stream off the Apple album page, downloads the cover as one MP4 into `data/motion/`, serves it with byte ranges. Also `rangeFile()` (used for VLC video). |
 | `src/cache.ts` | Lyrics cache (`data/lyrics-cache.json`). |
 | `src/names.ts` | `sameName`: whole-word name matching ("Che" is not "Cher"). |
