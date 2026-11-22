@@ -15,16 +15,23 @@
   };
   const CODECS = { opus: "Opus", vorbis: "Vorbis", mp4a: "AAC", "ec-3": "Dolby Digital Plus", "ac-3": "Dolby Digital", dtse: "DTS Express" };
   function quality() {
+    let tier = "";
     try {
       const text = JSON.stringify(player()?.getStatsForNerds?.() ?? {});
       const m = /(opus|vorbis|mp4a[\w.]*|ec-3|ac-3|dtse)\s*\((\d+)\)/i.exec(text);
-      if (!m) return "";
-      const codec = CODECS[m[1].toLowerCase().slice(0, 4) === "mp4a" ? "mp4a" : m[1].toLowerCase()];
-      const name = FORMATS[m[2]] ?? (codec ? `${codec} (format ${m[2]})` : "");
-      return name ? `YouTube Music · ${name}` : "";
-    } catch {
-      return "";
-    }
+      if (m) {
+        const codec = CODECS[m[1].toLowerCase().slice(0, 4) === "mp4a" ? "mp4a" : m[1].toLowerCase()];
+        tier = FORMATS[m[2]] ?? (codec ? `${codec} (format ${m[2]})` : "");
+      }
+    } catch {}
+    // What the audio data itself shows (sample rate and the bitrate actually received), from quality-probe.js.
+    const seen = window.__lvQuality?.();
+    if (!tier && !seen) return "";
+    if (!seen) return `YouTube Music · ${tier}`;
+    if (!tier) return `YouTube Music · ${seen.text}`;
+    const khz = seen.rate ? ` · ${+(seen.rate / 1000).toFixed(1)} kHz` : "";
+    const measured = seen.kbps ? ` · ~${seen.kbps.toLocaleString("en-US")} kbps received` : "";
+    return `YouTube Music · ${tier}${khz}${measured}`;
   }
 
   function read() {
@@ -40,6 +47,7 @@
       volume = Number(player()?.getVolume?.());
     } catch {}
     return {
+      site: "ytm",
       title: String(meta.title),
       like: document.querySelector("#like-button-renderer")?.getAttribute("like-status") === "LIKE",
       shuffle: !!b?.hasAttribute("shuffle-on"),

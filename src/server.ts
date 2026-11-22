@@ -95,7 +95,9 @@ function recompute(): void {
   // YouTube Music in a browser: its own like, shuffle, repeat, volume and audio quality, from the viewer's browser extension.
   const ytm = ytmNow();
   if (!picked.none && ytm && BROWSER_APP.test(picked.app ?? "") && sameSong(ytm, picked.title)) {
-    picked = { ...picked, spotify: { heart: ytm.heart, shuffle: ytm.shuffle, repeat: ytm.repeat, volume: ytm.volume }, ...(ytm.quality ? { quality: ytm.quality } : {}) };
+    // Amazon Music: only the quality is shown (its like, shuffle and repeat buttons could not be read reliably).
+    const controls = ytm.site === "amazon" ? {} : { spotify: { heart: ytm.heart, shuffle: ytm.shuffle, repeat: ytm.repeat, volume: ytm.volume } };
+    picked = { ...picked, ...controls, ...(ytm.quality ? { quality: ytm.quality } : {}) };
   }
 
   // A song paused for longer than a minute (or a tab left open on one) is not "what is playing": show the idle screen.

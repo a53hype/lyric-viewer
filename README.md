@@ -142,7 +142,7 @@ The quality line shows YouTube's nominal rate for the audio format it is playing
 
 ### Amazon Music extras (optional)
 
-The same for Amazon Music in a browser: the extension in `extension/amazon-music` adds like, shuffle, repeat, volume and the quality: Amazon's label
+The same for Amazon Music in a browser: the extension in `extension/amazon-music` adds the quality (no like, shuffle or repeat buttons): Amazon's label
 (Dolby Atmos, Ultra HD, HD or SD) and the real format, such as `FLAC 24-bit / 96 kHz · ~2,320 kbps`. It works on music.amazon.com and its country sites (.co.uk, .de, .fr, .it, .es, .co.jp, .ca, .com.au,
 .in, .com.br, .com.mx). Load it the same way as the YouTube Music one (**Load unpacked**, pick the `extension/amazon-music` folder); both can
 be installed together.

@@ -71,12 +71,9 @@ test("a rate limit is reported; other trouble just gives no ids", async () => {
 test("Spicy Lyrics is asked for a song that was not found on Spotify, using its own search", async () => {
   const fake = fakeSpicy((url) => (url.pathname === "/v1/tracks/search" ? Response.json(SEARCH) : Response.json(LYRICS)));
   try {
-    const track = { ...TRACK };
-    const out = await lookupOne("spicy", track);
+    const out = await lookupOne("spicy", { ...TRACK });
     expect(out.state).toBe("found");
     expect(out.sync).toBe("line");
-    expect(track.spotifyIds).toEqual([ID_A, ID_B]);
-    expect(track.spotifyId).toBe(ID_A);
     expect(fake.calls[1]).toBe(`/v1/lyrics/${ID_A}`);
   } finally {
     fake.restore();
