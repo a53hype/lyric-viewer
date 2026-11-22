@@ -1,5 +1,5 @@
-// Spicy Lyrics plays a Canvas through Spotify's own manifests. Here Spotify's debugger bridge gives the Canvas file's
-// address (an MP4 on Spotify's CDN), which a video element plays directly.
+// Spicy Lyrics' Canvas Stage receives the video address from the local server. The server now looks it up
+// independently by Spotify track ID; a debugger-derived Spotify Canvas remains a fallback source.
 import { viewer } from "../state.ts";
 import { canvasWithheld } from "../pair.ts";
 
