@@ -9,6 +9,7 @@ import { current, describe, ensureSearch, lyricsOf, onChange, pin, recheck, sear
 import { ALL_IDS } from "./lookup.ts";
 import { spotifyCanvas, spotifyDo, spotifyQuality, type SpotifyCanvas } from "./spotifyLocal.ts";
 import { animatedCover, motionFile, rangeFile } from "./motion.ts";
+import { imageSize } from "./imageSize.ts";
 import { readSettings, writeSettings } from "./settings.ts";
 import { scanMusic, startMusicIndex } from "./local.ts";
 import { vlcArt, vlcCommand, vlcCurrentPath, vlcMedia } from "./vlc.ts";
@@ -169,6 +170,8 @@ onChange(broadcast);
 // ---- covers ---------------------------------------------------------------------------------
 
 const covers = new Map<string, { type: string; bytes: Uint8Array }>();
+/** A player picture smaller than this (on its short side) is too small to fill the screen sharply. */
+const SMALL_COVER_PX = 500;
 
 async function coverFor(key: string, videoSong = false): Promise<Response> {
   const headers = (type: string) => ({ "Content-Type": type, "Cache-Control": "no-store" });
@@ -184,7 +187,7 @@ async function coverFor(key: string, videoSong = false): Promise<Response> {
     const bytes = new Uint8Array(readFileSync(local));
     return new Response(bytes, { headers: { ...headers(bytes[0] === 0x89 ? "image/png" : "image/jpeg"), "X-Cover-Source": "player" } });
   };
-  const fromUrl = (kind: "spotify" | "apple") => async (): Promise<Response | null> => {
+  const fromUrl = (kind: "spotify" | "apple" | "ytm") => async (): Promise<Response | null> => {
     const remote = await remoteCover(key, kind);
     return remote ? new Response(remote.bytes, { headers: headers(remote.type) }) : null;
   };
@@ -199,6 +202,26 @@ async function coverFor(key: string, videoSong = false): Promise<Response> {
     : fromSpotify
       ? [fromUrl("spotify"), playerCover, fromUrl("apple")]
       : [playerCover, fromUrl("apple"), fromUrl("spotify")];
+  // A browser (YouTube Music, say) hands Windows a small thumbnail, which looks pixelated when it fills the screen.
+  // When the player's picture is small and a catalogue has the song (the artist has to match), the catalogue's
+  // larger cover is shown instead; with no catalogue cover the small one is kept.
+  const fromBrowser = /chrome|edge|firefox|brave|opera|vivaldi|arc|youtube/i.test(media.app ?? "");
+  if (!videoSong && !fromSpotify && fromBrowser) {
+    // YouTube Music's own cover for the song, at full size, is the same picture the player shows, sharper.
+    const ytm = await fromUrl("ytm")();
+    if (ytm) return ytm;
+    const own = await playerCover();
+    if (own) {
+      const size = imageSize(new Uint8Array(await own.clone().arrayBuffer()));
+      if (size && Math.min(size.width, size.height) < SMALL_COVER_PX) {
+        for (const step of [fromUrl("apple"), fromUrl("spotify")]) {
+          const better = await step();
+          if (better) return better;
+        }
+      }
+      return own;
+    }
+  }
   for (const step of order) {
     const hit = await step();
     if (hit) return hit;
@@ -206,9 +229,9 @@ async function coverFor(key: string, videoSong = false): Promise<Response> {
   return new Response("", { status: 404 });
 }
 
-async function remoteCover(key: string, kind: "spotify" | "apple"): Promise<{ type: string; bytes: Uint8Array } | null> {
+async function remoteCover(key: string, kind: "spotify" | "apple" | "ytm"): Promise<{ type: string; bytes: Uint8Array } | null> {
   const search = searchByKey(key);
-  const url = kind === "spotify" ? search?.spotifyCover : search?.cover;
+  const url = kind === "spotify" ? search?.spotifyCover : kind === "ytm" ? search?.ytmCover : search?.cover;
   if (!url?.startsWith("https://")) return null;
   const have = covers.get(url);
   if (have) return have;

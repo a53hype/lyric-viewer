@@ -53,6 +53,7 @@ export type Search = {
   track?: TrackInfo;
   cover?: string;
   spotifyCover?: string;
+  ytmCover?: string;
   outcomes: Map<Id, Outcome>;
   pending: Set<Id>;
   resolving: boolean;
@@ -173,6 +174,7 @@ async function run(search: Search, m: Media): Promise<void> {
   search.track = resolved.track;
   search.cover = resolved.cover;
   search.spotifyCover = resolved.spotifyCover;
+  search.ytmCover = resolved.ytmCover;
   search.resolving = false;
   changed();
 

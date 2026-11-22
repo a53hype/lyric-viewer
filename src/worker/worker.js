@@ -14,8 +14,8 @@
  *                               (older form, which searches too: /motion?artist=&album=)
  *   GET /meanings?song_id=<n>   the annotations on a Genius song, trimmed to what is shown (JSON)
  *   GET /referents?song_id=<n>  the same, as Genius sends them (JSON); optional page (1-5)
- *   GET /ytm/search?q=<text>    YouTube Music song search: {songs:[{videoId,title,artists,durationMs}]}
- *   GET /ytm/lyrics?videoId=<id>  a YouTube Music song's lyrics: {text, source}
+ *   GET /ytm/search?q=<text>    YouTube Music song search: {songs:[{videoId,title,artists,durationMs,art?}]}
+ *   GET /ytm/lyrics?videoId=<id>  a YouTube Music song's lyrics: {text, source, lines?} (lines: [{startMs,endMs,text}] when timed)
  * and it only answers requests that come from Spotify's own page. It holds no
  * secrets and needs no environment variables.
  */
@@ -121,11 +121,18 @@ const YTM_CONTEXT = { client: { clientName: "WEB_REMIX", clientVersion: "1.20250
 const YTM_SONGS_ONLY = "EgWKAQIIAWoKEAMQBBAJEAoQBQ%3D%3D";
 const VIDEO_ID = /^[\w-]{11}$/;
 
-async function ytm(path, body) {
+// The web client only gets YouTube Music's plain lyrics. The Android app asks for the same lyrics
+// page and is sent the timed version (line by line), so the lyrics page alone is requested as it.
+const YTM_ANDROID = { clientName: "ANDROID_MUSIC", clientVersion: "7.21.50", hl: "en", gl: "US" };
+const YTM_ANDROID_UA = "com.google.android.apps.youtube.music/7.21.50 (Linux; U; Android 11) gzip";
+
+async function ytm(path, body, android = false) {
   const res = await fetch(`${YTM_API}/${path}?prettyPrint=false`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "User-Agent": USER_AGENT, "Accept-Language": "en-US,en;q=0.9" },
-    body: JSON.stringify({ context: YTM_CONTEXT, ...body }),
+    headers: android
+      ? { "Content-Type": "application/json", "User-Agent": YTM_ANDROID_UA, "X-YouTube-Client-Name": "21", "X-YouTube-Client-Version": YTM_ANDROID.clientVersion, "Accept-Language": "en-US,en;q=0.9" }
+      : { "Content-Type": "application/json", "User-Agent": USER_AGENT, "Accept-Language": "en-US,en;q=0.9" },
+    body: JSON.stringify({ context: android ? { client: YTM_ANDROID } : YTM_CONTEXT, ...body }),
   });
   if (!res.ok) throw new Error(`youtube music responded ${res.status}`);
   return res.json();
@@ -151,9 +158,12 @@ function collectSongs(node, out) {
         ?.watchEndpoint?.videoId;
     // "Artist • Album • 3:24": artists first, the length last.
     const details = (columns[1] ?? "").split("•").map((s) => s.trim());
+    const thumbs = item.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails ?? [];
+    const art = thumbs[thumbs.length - 1]?.url;
     if (videoId && columns[0] && details.length >= 2) {
       out.push({
         videoId,
+        ...(art ? { art } : {}),
         title: columns[0],
         artists: (details[0] ?? "").split(/\s*(?:&|,)\s*/).filter(Boolean),
         durationMs: clockToMs(details[details.length - 1]),
@@ -169,12 +179,67 @@ async function ytmSearch(q) {
   return { songs: songs.slice(0, 10) };
 }
 
+/** The first value stored under `key` anywhere in a response, or undefined. */
+function findKey(node, key) {
+  if (!node || typeof node !== "object") return undefined;
+  if (key in node) return node[key];
+  for (const value of Object.values(node)) {
+    const found = findKey(value, key);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
+/** "Source: Musixmatch" (or the like) anywhere in a response, without the "Source:". */
+function findSource(node) {
+  if (typeof node === "string") return /^Source:\s*\S/i.test(node) ? node.replace(/^Source:\s*/i, "").trim() : undefined;
+  if (!node || typeof node !== "object") return undefined;
+  for (const value of Object.values(node)) {
+    const found = findSource(value);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/** Timed lines from the Android answer, or null if it has none that make sense. */
+function timedLines(page) {
+  const cues = findKey(page, "timedLyricsData");
+  if (!Array.isArray(cues)) return null;
+  const lines = [];
+  for (const cue of cues) {
+    const text = String(cue?.lyricLine ?? "").trim();
+    const startMs = Number(cue?.cueRange?.startTimeMilliseconds);
+    const endMs = Number(cue?.cueRange?.endTimeMilliseconds);
+    if (!Number.isFinite(startMs) || startMs < 0) continue;
+    lines.push({ startMs, endMs: Number.isFinite(endMs) && endMs >= startMs ? endMs : startMs, text });
+  }
+  // A few timed lines, in order, with some text: anything else is not a lyrics answer.
+  if (lines.length < 2 || !lines.some((l) => l.text)) return null;
+  for (let i = 1; i < lines.length; i++) if (lines[i].startMs < lines[i - 1].startMs) return null;
+  return lines;
+}
+
 async function ytmLyrics(videoId) {
   const next = await ytm("next", { videoId });
   const tabs = next?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs ?? [];
   const tab = tabs.map((t) => t.tabRenderer).find((t) => /lyrics/i.test(t?.title ?? ""));
   const browseId = tab && !tab.unselectable ? tab.endpoint?.browseEndpoint?.browseId : undefined;
   if (!browseId) return { text: null };
+
+  // Timed first. If the Android answer fails or has no timing, the plain lyrics are used as before.
+  try {
+    const timed = await ytm("browse", { browseId }, true);
+    const lines = timedLines(timed);
+    if (lines) {
+      return {
+        text: lines.map((l) => l.text).join("\n").trim() || null,
+        source: findSource(timed) || null,
+        lines,
+      };
+    }
+  } catch {
+    // Fall through to the plain lyrics.
+  }
 
   const page = await ytm("browse", { browseId });
   const shelf = page?.contents?.sectionListRenderer?.contents?.[0]?.musicDescriptionShelfRenderer;

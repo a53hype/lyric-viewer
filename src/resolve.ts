@@ -2,6 +2,9 @@ import { config } from "./lookup.ts";
 import { readTrack } from "./spotify.ts";
 import { sameName } from "./names.ts";
 import { spotifyClientSearch } from "./spotifyLocal.ts";
+import worker from "./worker/worker.js";
+import { WORKER_BASE } from "./shim.ts";
+import { bigArt } from "./ytmArt.ts";
 import type { TrackInfo } from "./utils/Lyrics/providers/types.ts";
 
 /**
@@ -13,7 +16,7 @@ import type { TrackInfo } from "./utils/Lyrics/providers/types.ts";
  */
 
 export type Playing = { title: string; artist: string; album: string; durationMs: number };
-export type Resolved = { track: TrackInfo; cover?: string; spotifyCover?: string; spotify: "found" | "missing" | "unconfigured" };
+export type Resolved = { track: TrackInfo; cover?: string; spotifyCover?: string; ytmCover?: string; spotify: "found" | "missing" | "unconfigured" };
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36";
 
@@ -68,6 +71,29 @@ async function searchApple(p: Playing): Promise<AppleSong | null> {
     if (!best || s > best.s) best = { song, s };
   }
   return best && best.s >= 5 ? best.song : null;
+}
+
+// ---- YouTube Music: its own cover, at full size ---------------------------------------------------
+
+/** The song's cover as YouTube Music has it (the artist has to match, as with Apple), enlarged. */
+async function searchYtmCover(p: Playing): Promise<string | undefined> {
+  try {
+    const q = encodeURIComponent(`${p.artist} ${plainTitle(p.title)}`);
+    const res = await (worker as any).fetch(new Request(`${WORKER_BASE}/ytm/search?q=${q}`));
+    if (!res.ok) return undefined;
+    const songs: { title: string; artists: string[]; durationMs: number; art?: string }[] = (await res.json())?.songs ?? [];
+    const wantArtist = flat(p.artist.split(/\s*[;,&]\s*/)[0] || p.artist);
+    let best: { art: string; s: number } | null = null;
+    for (const song of songs) {
+      if (!song.art || !bigArt(song.art)) continue;
+      if (wantArtist && !song.artists.some((a) => sameName(flat(a), wantArtist))) continue;
+      const s = score(p, song.title, song.artists, undefined, song.durationMs);
+      if (!best || s > best.s) best = { art: song.art, s };
+    }
+    return best && best.s >= 5 ? bigArt(best.art) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 // ---- Spotify: the song's id, with your own app's credentials --------------------------------
@@ -170,7 +196,8 @@ async function doResolve(p: Playing, spotifyHint?: string): Promise<Resolved> {
   const run = bearer
     ? (url: string) => getJson(url, { headers: { Authorization: `Bearer ${bearer}` } })
     : (url: string) => spotifyClientSearch(url);
-  const [apple, spotify] = await Promise.all([searchApple(p), searchSpotify(p, run)]);
+  // Spotify naming the song means Spotify is the player, whose own cover is used; otherwise YouTube Music's is looked up too.
+  const [apple, spotify, ytmCover] = await Promise.all([searchApple(p), searchSpotify(p, run), spotifyHint ? undefined : searchYtmCover(p)]);
 
   let cover = apple?.artworkUrl100?.replace(/\d+x\d+bb/, "600x600bb");
   if (apple && !base.album) base.album = apple.collectionName ?? "";
@@ -225,5 +252,5 @@ async function doResolve(p: Playing, spotifyHint?: string): Promise<Resolved> {
     }
   }
   cover = cover ?? spotifyCover;  base.coverUrl = spotifyCover ?? cover;
-  return { track: base, cover, spotifyCover, spotify: base.spotifyId ? "found" : bearer ? "missing" : "unconfigured" };
+  return { track: base, cover, spotifyCover, ytmCover, spotify: base.spotifyId ? "found" : bearer ? "missing" : "unconfigured" };
 }
