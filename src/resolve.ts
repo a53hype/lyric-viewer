@@ -195,9 +195,18 @@ async function doResolve(p: Playing, spotifyHint?: string): Promise<Resolved> {
   // Search without a desktop session first: Spotify's public Web Player catalogue can be queried using
   // the short-lived token exposed by its public embed page. Your own app's token takes priority when configured;
   // the running Spotify client remains a final fallback for the songs the anonymous catalogue misses.
+  const searchFallback = async (url: string) => {
+    const anonymous = await spotifyAnonymousSearch(url);
+    if (anonymous?.tracks?.items?.length) return anonymous;
+    return (await spotifyClientSearch(url)) ?? anonymous;
+  };
   const run = bearer
-    ? async (url: string) => (await getJson(url, { headers: { Authorization: `Bearer ${bearer}` } })) ?? (await spotifyAnonymousSearch(url)) ?? (await spotifyClientSearch(url))
-    : async (url: string) => (await spotifyAnonymousSearch(url)) ?? (await spotifyClientSearch(url));
+    ? async (url: string) => {
+        const own = await getJson(url, { headers: { Authorization: `Bearer ${bearer}` } });
+        if (own?.tracks?.items?.length) return own;
+        return (await searchFallback(url)) ?? own;
+      }
+    : searchFallback;
   // Spotify naming the song means Spotify is the player, whose own cover is used; otherwise YouTube Music's is looked up too.
   const [apple, spotify, ytmCover] = await Promise.all([searchApple(p), searchSpotify(p, run), spotifyHint ? undefined : searchYtmCover(p)]);
 
