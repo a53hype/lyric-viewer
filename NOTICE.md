@@ -10,7 +10,7 @@ Apple, VLC or any lyrics service named here.
 - **Spicy Lyrics' developer API** is only used with a key you enter yourself. Its lyrics are never stored on disk by this app.
 - The other lyrics sources (LRCLIB, Unison, lrc.red, LRCMux, NetEase, QQ Music, KuGou, Kuwo, Deezer, AMLL TTML DB, BiniLyrics,
   YouTube Music, Genius, Musixmatch) are public services with their own terms. Use them as those terms allow.
-- Apple Music animated covers, Spotify covers and Spotify Canvases belong to their owners and are only shown on your own PC.
+- Apple Music animated covers, Spotify covers and Spotify Canvases belong to their owners and are only shown on your own PC. Spotify track matching uses its public Web Player catalogue; Canvas URLs are requested from the Spicy Lyrics Canvas service by track ID. The Canvas lookup format and anonymous Web Player contract were cross-checked against [Spicy Lyrics Mobile](https://github.com/spicylyrics/mobile), an AGPL-3.0 project.
 - The logo is the Lyrics Viewer (#Hype) logo.
 
 Lyrics Viewer (#Hype) is licensed under the GNU Affero General Public License v3.0 (see `LICENSE`).
