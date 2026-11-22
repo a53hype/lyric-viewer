@@ -1,0 +1,55 @@
+{
+  "manifest_version": 3,
+  "name": "Lyric Viewer: Amazon Music controls",
+  "version": "1.0.0",
+  "description": "Lets the Lyric Viewer on this PC show and use Amazon Music's like, shuffle, repeat and volume, and show the audio quality. It only talks to the viewer on 127.0.0.1.",
+  "host_permissions": [
+    "http://127.0.0.1:3838/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://music.amazon.com/*",
+        "https://music.amazon.co.uk/*",
+        "https://music.amazon.de/*",
+        "https://music.amazon.fr/*",
+        "https://music.amazon.it/*",
+        "https://music.amazon.es/*",
+        "https://music.amazon.co.jp/*",
+        "https://music.amazon.ca/*",
+        "https://music.amazon.com.au/*",
+        "https://music.amazon.in/*",
+        "https://music.amazon.com.br/*",
+        "https://music.amazon.com.mx/*"
+      ],
+      "js": [
+        "quality-probe.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://music.amazon.com/*",
+        "https://music.amazon.co.uk/*",
+        "https://music.amazon.de/*",
+        "https://music.amazon.fr/*",
+        "https://music.amazon.it/*",
+        "https://music.amazon.es/*",
+        "https://music.amazon.co.jp/*",
+        "https://music.amazon.ca/*",
+        "https://music.amazon.com.au/*",
+        "https://music.amazon.in/*",
+        "https://music.amazon.com.br/*",
+        "https://music.amazon.com.mx/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
