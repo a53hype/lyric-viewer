@@ -1,5 +1,5 @@
 import { config } from "./lookup.ts";
-import { readTrack } from "./spotify.ts";
+import { readTrack, spotifyAnonymousSearch } from "./spotify.ts";
 import { sameName } from "./names.ts";
 import { spotifyClientSearch } from "./spotifyLocal.ts";
 import worker from "./worker/worker.js";
@@ -192,10 +192,12 @@ async function doResolve(p: Playing, spotifyHint?: string): Promise<Resolved> {
   };
 
   const bearer = await spotifyToken();
-  // Your own Spotify app's search when one is set up; otherwise the running Spotify client searches (no app or key needed, Spotify just has to be open).
+  // Search without a desktop session first: Spotify's public Web Player catalogue can be queried using
+  // the short-lived token exposed by its public embed page. Your own app's token takes priority when configured;
+  // the running Spotify client remains a final fallback for the songs the anonymous catalogue misses.
   const run = bearer
     ? (url: string) => getJson(url, { headers: { Authorization: `Bearer ${bearer}` } })
-    : (url: string) => spotifyClientSearch(url);
+    : async (url: string) => (await spotifyAnonymousSearch(url)) ?? (await spotifyClientSearch(url));
   // Spotify naming the song means Spotify is the player, whose own cover is used; otherwise YouTube Music's is looked up too.
   const [apple, spotify, ytmCover] = await Promise.all([searchApple(p), searchSpotify(p, run), spotifyHint ? undefined : searchYtmCover(p)]);
 
