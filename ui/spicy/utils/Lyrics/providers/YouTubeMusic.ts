@@ -1,12 +1,13 @@
 import Logger from "../../Logger.ts";
 import { normalizeProxyUrl } from "./Genius.ts";
-import { parsePlainToStatic } from "./Lrc.ts";
+import { entriesToLine, parsePlainToStatic } from "./Lrc.ts";
 import { rankCandidates } from "./Match.ts";
 import type { TrackInfo } from "./types.ts";
 
 const logger = new Logger("YouTube Music");
 
-// YouTube Music has plain (unsynced) lyrics, licensed from LyricFind. Its API is out of
+// YouTube Music has lyrics from Musixmatch, line-timed for many songs (the Worker asks for the timed
+// version and sends them as `lines`) and plain for the rest. Its API is out of
 // reach of Spotify's page (no CORS, and Spicetify's proxy is refused), so it goes through
 // the same Cloudflare Worker as Genius (workers/genius-proxy, /ytm/*). Without the
 // Worker's address in settings, this provider returns nothing.
@@ -20,6 +21,15 @@ async function getJson(url: string): Promise<any> {
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`Proxy responded ${res.status}`);
   return res.json();
+}
+
+/** Timed lines from the Worker ({startMs, endMs, text}) as Spicy Lyrics' "Line" lyrics, or null if there are none. */
+export function timedToLine(lines: unknown, durationMs: number): any | null {
+  if (!Array.isArray(lines) || lines.length === 0) return null;
+  const entries = lines
+    .filter((l: any) => l && Number.isFinite(l.startMs) && typeof l.text === "string")
+    .map((l: any) => ({ time: l.startMs / 1000, text: l.text }));
+  return entriesToLine(entries, durationMs / 1000);
 }
 
 export async function fetchFromYouTubeMusic(track: TrackInfo, proxyUrl: string): Promise<any | null> {
@@ -37,7 +47,7 @@ export async function fetchFromYouTubeMusic(track: TrackInfo, proxyUrl: string):
   for (const song of ranked) {
     try {
       const lyrics = await getJson(`${base}/ytm/lyrics?videoId=${encodeURIComponent(song.videoId)}`);
-      const parsed = lyrics?.text ? parsePlainToStatic(lyrics.text) : null;
+      const parsed = timedToLine(lyrics?.lines, track.durationMs) ?? (lyrics?.text ? parsePlainToStatic(lyrics.text) : null);
       if (parsed) {
         return {
           ...parsed,
