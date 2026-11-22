@@ -40,7 +40,7 @@ test("Canvas lookups coalesce concurrent calls and cache a found video", async (
   const realFetch = globalThis.fetch;
   let calls = 0;
   let release!: () => void;
-  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const gate = new Promise<void>((resolve) => { release = () => resolve(); });
 
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     calls++;
