@@ -130,6 +130,18 @@ keys: never share or commit it (it is in `.gitignore`).
 - **Music folders** (`musicFolders`): extra folders to search for the playing song's file. Files anywhere Windows has indexed are found
   without this.
 
+### YouTube Music extras (optional)
+
+For YouTube Music playing in Chrome, Edge or Brave, a small browser extension in `extension/youtube-music` gives the viewer YouTube Music's like,
+shuffle, repeat and volume buttons and an audio quality line. It needs no debugging port. It only sends the page's player state to the viewer
+on `127.0.0.1` and does the four button actions when you press them in the viewer.
+
+1. Open `chrome://extensions` (or `edge://extensions`), switch on **Developer mode**, click **Load unpacked** and pick the `extension/youtube-music` folder.
+2. Open music.youtube.com and play a song with the viewer running.
+
+If you changed `port` in `config.json`, change `3838` in the extension's `manifest.json` and `background.js` to match, then reload the extension.
+The quality line shows YouTube's nominal rate for the audio format it is playing (Opus 160 kbps, or Opus 256 kbps with Premium, for example), so it is not an exact bitrate. A format it does not know shows its codec and format number.
+
 ### Spotify extras (optional)
 
 The exact song, Canvas, heart/shuffle/repeat/volume and the quality line come from Spotify's player state, read over Chromium's debugger

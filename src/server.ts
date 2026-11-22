@@ -10,6 +10,7 @@ import { ALL_IDS } from "./lookup.ts";
 import { spotifyCanvas, spotifyDo, spotifyQuality, type SpotifyCanvas } from "./spotifyLocal.ts";
 import { animatedCover, motionFile, rangeFile } from "./motion.ts";
 import { imageSize } from "./imageSize.ts";
+import { acceptYtmState, drainYtm, queueYtm, sameSong, ytmNow } from "./ytmControls.ts";
 import { readSettings, writeSettings } from "./settings.ts";
 import { scanMusic, startMusicIndex } from "./local.ts";
 import { vlcArt, vlcCommand, vlcCurrentPath, vlcMedia } from "./vlc.ts";
@@ -29,6 +30,8 @@ const workerFetch = (worker as any).fetch.bind(worker);
 let media: Media = { none: true };
 /** What Windows reports, what VLC reports, and Spotify's streaming quality (when its debugger port is open). */
 let smtcMedia: Media = { none: true };
+/** Windows' name for a browser playing the song. */
+const BROWSER_APP = /chrome|edge|firefox|brave|opera|vivaldi|arc/i;
 let vlcNow: Media | null = null;
 let spotifyQualityText: string | null = null;
 let spotifyCanvasNow: SpotifyCanvas | null = null;
@@ -77,6 +80,12 @@ function recompute(): void {
     const s = spotifyCanvasNow;
     picked = { ...picked, spotify: { heart: s.heart, shuffle: s.shuffle, repeat: s.repeat, volume: s.volume } };
     if (s.url && s.name.toLowerCase() === (picked.title ?? "").toLowerCase()) picked = { ...picked, canvas: { url: s.url, type: s.type ?? "VIDEO_LOOPING" } };
+  }
+
+  // YouTube Music in a browser: its own like, shuffle, repeat, volume and audio quality, from the viewer's browser extension.
+  const ytm = ytmNow();
+  if (!picked.none && ytm && BROWSER_APP.test(picked.app ?? "") && sameSong(ytm, picked.title)) {
+    picked = { ...picked, spotify: { heart: ytm.heart, shuffle: ytm.shuffle, repeat: ytm.repeat, volume: ytm.volume }, ...(ytm.quality ? { quality: ytm.quality } : {}) };
   }
 
   // A song paused for longer than a minute (or a tab left open on one) is not "what is playing": show the idle screen.
@@ -300,6 +309,14 @@ const server = Bun.serve({
     const ownHosts = [`${HOST}:${PORT}`, `localhost:${PORT}`];
     if (!ownHosts.includes(req.headers.get("host") ?? "")) return new Response("", { status: 403 });
     const origin = req.headers.get("origin");
+    // The one exception: the viewer's own browser extension reports YouTube Music's player state. A browser sets an extension's
+    // Origin itself, so a website cannot pass for it.
+    if (url.pathname === "/ytm/state" && req.method === "POST" && /^(chrome|moz)-extension:\/\/[a-z0-9-]+$/i.test(origin ?? "")) {
+      const state = acceptYtmState(await req.json().catch(() => null));
+      if (!state) return new Response("", { status: 400 });
+      recompute();
+      return json({ cmds: drainYtm() });
+    }
     if (origin && origin !== `http://${HOST}:${PORT}` && origin !== `http://localhost:${PORT}`) return new Response("", { status: 403 });
     if (!origin && req.method !== "GET" && req.method !== "HEAD") return new Response("", { status: 403 });
 
@@ -365,7 +382,12 @@ const server = Bun.serve({
       if (/^(play|pause|toggle|next|prev|seek \d{1,9})$/.test(cmd)) send(cmd);
       // Heart, shuffle, repeat and volume are Spotify's own (through its debugger port).
       const own = /^(heart|shuffle|repeat|volume) ?([0-9.]*)$/.exec(cmd);
-      if (own) void spotifyDo(own[1], Number(own[2] || 0)).then(() => setTimeout(() => void pollSpotify(), 150));
+      if (own) {
+        // The player bar that is showing is the one that is used: YouTube Music's (through the extension) or Spotify's.
+        const ytm = ytmNow();
+        if (ytm && BROWSER_APP.test(smtcMedia.app ?? "") && sameSong(ytm, smtcMedia.title)) queueYtm(own[1], Number(own[2] || 0));
+        else void spotifyDo(own[1], Number(own[2] || 0)).then(() => setTimeout(() => void pollSpotify(), 150));
+      }
       return json({ ok: true });
     }
 
