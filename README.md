@@ -151,6 +151,15 @@ Amazon's page has no public description of its player, so the extension finds ea
 nothing or its state is wrong, open the player page, press F12 and run `window.dispatchEvent(new Event('lyric-viewer-amazon-debug'))` in
 the console: it prints what the extension sees, which is what is needed to fix it.
 
+
+### SoundCloud extras (optional)
+
+The same for SoundCloud in a browser: the extension in `extension/soundcloud` adds like, shuffle, repeat, volume and the audio quality. The
+quality is what the audio data really is (codec, sample rate and the bitrate received), so a free and a Go+ account each show their own;
+when the page hides it, the format SoundCloud names in the stream's address is shown instead. Load it like the others (**Load unpacked**,
+pick the `extension/soundcloud` folder). If a button does nothing or its state is wrong, open soundcloud.com, press F12 and run
+`window.dispatchEvent(new Event('lyric-viewer-soundcloud-debug'))` in the console, and send the output.
+
 ### Spotify extras (optional)
 
 Canvas no longer depends on this setting: the viewer resolves a Spotify track ID through Spotify's anonymous public catalogue and asks the Spicy Lyrics Canvas service directly. The debugger port is optional and is used for Spotify's exact live player state, heart, shuffle, repeat, volume and streaming-quality extras. Spotify has to be started with `--remote-debugging-port=8088` for those features. **That port can be used by any program on your PC**, so leave it off if you do not want those extras.

@@ -50,3 +50,13 @@ test("a measured quality line with ~ and a comma is accepted", () => {
   expect(parseYtmState({ title: "x", quality: q })?.quality).toBe(q);
   expect(parseYtmState({ title: "x", quality: "<img src=x>" })?.quality).toBeUndefined();
 });
+
+test("a SoundCloud report keeps its site, and its commands are not handed to another site", () => {
+  expect(parseYtmState({ site: "soundcloud", title: "Loop" })!.site).toBe("soundcloud");
+  acceptYtmState({ site: "soundcloud", title: "Loop" });
+  drainYtm("soundcloud");
+  queueYtm("shuffle");
+  expect(drainYtm("ytm")).toEqual([]);
+  queueYtm("shuffle");
+  expect(drainYtm("soundcloud")).toEqual([{ action: "shuffle", arg: 0 }]);
+});
